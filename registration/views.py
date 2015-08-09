@@ -9,6 +9,7 @@ from django.views.generic.edit import FormView
 from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters
+from django.http import JsonResponse
 
 from .compat import import_string
 # from .forms import RegistrationForm
@@ -89,16 +90,28 @@ class RegistrationView(_RequestPassingFormView):
 
     def form_valid(self, request, form):
         new_user = self.register(request, form)
-        success_url = self.get_success_url(request, new_user)
 
-        # success_url may be a simple string, or a tuple providing the
-        # full argument set for redirect(). Attempting to unpack it
-        # tells us which one it is.
-        try:
-            to, args, kwargs = success_url
-            return redirect(to, *args, **kwargs)
-        except ValueError:
-            return redirect(success_url)
+        # Check for AJAX request.
+        if request.is_ajax():
+            return JsonResponse({'succes': 'okay'})
+
+        else:
+            success_url = self.get_success_url(request, new_user)
+
+            # success_url may be a simple string, or a tuple providing the
+            # full argument set for redirect(). Attempting to unpack it
+            # tells us which one it is.
+            try:
+                to, args, kwargs = success_url
+                return redirect(to, *args, **kwargs)
+            except ValueError:
+                return redirect(success_url)
+
+    def form_invalid(self, form):
+        if self.request.is_ajax():
+            return JsonResponse({ 'errors': form.errors })
+        else:
+            super(RegistrationView, self).form_invalid(form)
 
     def registration_allowed(self, request):
         """
