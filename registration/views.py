@@ -93,7 +93,10 @@ class RegistrationView(_RequestPassingFormView):
 
         # Check for AJAX request.
         if request.is_ajax():
-            return JsonResponse({'succes': 'okay'})
+            return JsonResponse({
+                'status': 200,
+                'content': {'status': 'success'},
+            })
 
         else:
             success_url = self.get_success_url(request, new_user)
@@ -109,7 +112,10 @@ class RegistrationView(_RequestPassingFormView):
 
     def form_invalid(self, form):
         if self.request.is_ajax():
-            return JsonResponse({ 'errors': form.errors })
+            return JsonResponse({
+                'status': 200,
+                'content': {'status': 'error', 'data': form.errors},
+            })
         else:
             super(RegistrationView, self).form_invalid(form)
 
