@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters
 from django.http import JsonResponse
+from django.core.urlresolvers import reverse
 
 from .compat import import_string
 # from .forms import RegistrationForm
@@ -18,6 +19,18 @@ from .compat import import_string
 REGISTRATION_FORM_PATH = getattr(settings, 'REGISTRATION_FORM',
                                  'registration.forms.RegistrationForm')
 REGISTRATION_FORM = import_string(REGISTRATION_FORM_PATH)
+
+
+class AjaxRedirectMixin(object):
+
+    def redirect(self, request, success_url, *args, **kwargs):
+        if request.is_ajax():
+            return JsonResponse({
+                'status': 'success',
+                'data': success_url,
+            })
+        else:
+            return redirect(success_url, *args, **kwargs)
 
 
 class _RequestPassingFormView(FormView):
@@ -66,7 +79,7 @@ class _RequestPassingFormView(FormView):
         return super(_RequestPassingFormView, self).form_invalid(form)
 
 
-class RegistrationView(_RequestPassingFormView):
+class RegistrationView(AjaxRedirectMixin, _RequestPassingFormView):
     """
     Base class for user registration views.
 
@@ -85,36 +98,28 @@ class RegistrationView(_RequestPassingFormView):
 
         """
         if not self.registration_allowed(request):
-            return redirect(self.disallowed_url)
+            return self.redirect(request, self.disallowed_url)
         return super(RegistrationView, self).dispatch(request, *args, **kwargs)
 
     def form_valid(self, request, form):
         new_user = self.register(request, form)
 
-        # Check for AJAX request.
-        if request.is_ajax():
-            return JsonResponse({
-                'status': 200,
-                'content': {'status': 'success'},
-            })
+        success_url = self.get_success_url(request, new_user)
 
-        else:
-            success_url = self.get_success_url(request, new_user)
-
-            # success_url may be a simple string, or a tuple providing the
-            # full argument set for redirect(). Attempting to unpack it
-            # tells us which one it is.
-            try:
-                to, args, kwargs = success_url
-                return redirect(to, *args, **kwargs)
-            except ValueError:
-                return redirect(success_url)
+        # success_url may be a simple string, or a tuple providing the
+        # full argument set for redirect(). Attempting to unpack it
+        # tells us which one it is.
+        try:
+            to, args, kwargs = success_url
+            return self.redirect(request, reverse(to, *args, **kwargs))
+        except ValueError:
+            return self.redirect(request, success_url)
 
     def form_invalid(self, form):
         if self.request.is_ajax():
             return JsonResponse({
-                'status': 200,
-                'content': {'status': 'error', 'data': form.errors},
+                'status': 'error',
+                'data': form.errors,
             })
         else:
             super(RegistrationView, self).form_invalid(form)
@@ -137,7 +142,7 @@ class RegistrationView(_RequestPassingFormView):
         raise NotImplementedError
 
 
-class ActivationView(TemplateView):
+class ActivationView(AjaxRedirectMixin, TemplateView):
     """
     Base class for user activation views.
 
@@ -151,10 +156,16 @@ class ActivationView(TemplateView):
             success_url = self.get_success_url(request, activated_user)
             try:
                 to, args, kwargs = success_url
-                return redirect(to, *args, **kwargs)
+                return self.redirect(request, reverse(to, *args, **kwargs))
             except ValueError:
-                return redirect(success_url)
-        return super(ActivationView, self).get(request, *args, **kwargs)
+                return self.redirect(request, success_url)
+        if request.is_ajax():
+            return JsonResponse({
+                'status': 'error',
+                'data': 'invalid activation key',
+            })
+        else:
+            return super(ActivationView, self).get(request, *args, **kwargs)
 
     def activate(self, request, *args, **kwargs):
         """
