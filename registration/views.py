@@ -25,9 +25,12 @@ class AjaxRedirectMixin(object):
 
     def redirect(self, request, success_url, *args, **kwargs):
         if request.is_ajax():
+            kwargs.update({
+                    'redirect': success_url,
+            })
             return JsonResponse({
                 'status': 'success',
-                'data': success_url,
+                'data': kwargs,
             })
         else:
             return redirect(success_url, *args, **kwargs)
@@ -147,7 +150,7 @@ class ActivationView(AjaxRedirectMixin, TemplateView):
     Base class for user activation views.
 
     """
-    http_method_names = ['get']
+    http_method_names = ['get', 'post']
     template_name = 'registration/activate.html'
 
     def get(self, request, *args, **kwargs):
@@ -156,9 +159,10 @@ class ActivationView(AjaxRedirectMixin, TemplateView):
             success_url = self.get_success_url(request, activated_user)
             try:
                 to, args, kwargs = success_url
-                return self.redirect(request, reverse(to, *args, **kwargs))
+                return self.redirect(request, reverse(to, *args, **kwargs),
+                                     username=activated_user.username)
             except ValueError:
-                return self.redirect(request, success_url)
+                return self.redirect(request, success_url, username=activated_user.username)
         if request.is_ajax():
             return JsonResponse({
                 'status': 'error',
@@ -166,6 +170,9 @@ class ActivationView(AjaxRedirectMixin, TemplateView):
             })
         else:
             return super(ActivationView, self).get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        return self.get(request, activation_key=request.POST.get('activation_key', ''))
 
     def activate(self, request, *args, **kwargs):
         """

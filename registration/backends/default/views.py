@@ -140,4 +140,4 @@ class ActivationView(BaseActivationView):
         return activated_user
 
     def get_success_url(self, request, user):
-        return ('registration_activation_complete', (), {})
+        return getattr(settings, 'REGISTRATION_REDIRECT_URL', ('registration_activation_complete', (), {}))
